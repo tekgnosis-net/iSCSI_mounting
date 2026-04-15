@@ -159,26 +159,35 @@ if [[ -n "$EXISTING_SESSION" ]]; then
             device_name="${BASH_REMATCH[1]}"
             if [[ -n "$device_name" ]]; then
                 TARGET_DEVICE="/dev/$device_name"
-                break
+                ## 15-04-2026
+                # Change to iterate all targets
+                # Check if any partition of this device is mounted
+                if [[ -n "$TARGET_DEVICE" ]]; then
+                    MOUNT_INFO=$(mount | grep "^$TARGET_DEVICE" || true)
+                    if [[ -n "$MOUNT_INFO" ]]; then
+                        # Extract mount point from mount output
+                        CURRENT_MOUNT=$(echo "$MOUNT_INFO" | awk '{print $3}' | head -1)
+                        echo -e "${GREEN}✓ Target $TARGET_IQN is already connected and mounted${NC}"
+                        echo -e "${BLUE}Device: $TARGET_DEVICE${NC}"
+                        echo -e "${BLUE}Mount point: $CURRENT_MOUNT${NC}"
+                        echo
+                        echo -e "${ORANGE}The iSCSI LUN is already properly configured and mounted.${NC}"
+                        echo -e "${ORANGE}No additional action required.${NC}"
+                        #exit 0
+                        # Continue here
+                        continue
+                    else
+                        echo -e "${GREEN}✓ Target $TARGET_IQN is already connected and mounted${NC}"
+                        echo -e "${BLUE}Device: $TARGET_DEVICE${NC}"
+                        echo -e "${ORANGE}The iSCSI LUN is not configured and mounted yet.${NC}"
+                        break
+                    fi
+                fi
+                #break
             fi
         fi
     done <<< "$(iscsiadm -m session -P 3 2>/dev/null)"
     
-    # Check if any partition of this device is mounted
-    if [[ -n "$TARGET_DEVICE" ]]; then
-        MOUNT_INFO=$(mount | grep "^$TARGET_DEVICE" || true)
-        if [[ -n "$MOUNT_INFO" ]]; then
-            # Extract mount point from mount output
-            CURRENT_MOUNT=$(echo "$MOUNT_INFO" | awk '{print $3}' | head -1)
-            echo -e "${GREEN}✓ Target $TARGET_IQN is already connected and mounted${NC}"
-            echo -e "${BLUE}Device: $TARGET_DEVICE${NC}"
-            echo -e "${BLUE}Mount point: $CURRENT_MOUNT${NC}"
-            echo
-            echo -e "${ORANGE}The iSCSI LUN is already properly configured and mounted.${NC}"
-            echo -e "${ORANGE}No additional action required.${NC}"
-            exit 0
-        fi
-    fi
     
     echo -e "${BLUE}Target is connected but not mounted. Continuing with mount setup...${NC}"
     LOGIN_EXIT_CODE=0  # Skip login since session exists
@@ -265,27 +274,28 @@ while IFS= read -r line; do
         device_name="${BASH_REMATCH[1]}"
         if [[ -n "$device_name" ]]; then
             TARGET_SESSION_INFO="/dev/$device_name"
-            break  # Take the first running device for this target
+            #break  # Take the first running device for this target
+            # Iterate to next **unmounted** Device
+            # Check if any partition of this device is mounted
+            # Check if the target device is already mounted
+            if [[ -n "$TARGET_SESSION_INFO" && -b "$TARGET_SESSION_INFO" ]]; then
+                is_mounted=false
+                for mounted_device in "${MOUNTED_ISCSI_DEVICES[@]}"; do
+                    if [[ "$TARGET_SESSION_INFO" == "$mounted_device" ]]; then
+                        echo "Device for target is already mounted: $TARGET_SESSION_INFO, looking for unmounted devices..."
+                        is_mounted=true
+                        continue
+                    fi
+                done                
+                # If not mounted, use this device
+                if [[ "$is_mounted" == false ]]; then
+                    DEVICE_PATH="$TARGET_SESSION_INFO"
+                fi
+            fi
         fi
     fi
 done <<< "$(iscsiadm -m session -P 3 2>/dev/null)"
 
-# Check if the target device is already mounted
-if [[ -n "$TARGET_SESSION_INFO" && -b "$TARGET_SESSION_INFO" ]]; then
-    is_mounted=false
-    for mounted_device in "${MOUNTED_ISCSI_DEVICES[@]}"; do
-        if [[ "$TARGET_SESSION_INFO" == "$mounted_device" ]]; then
-            echo "Device for target is already mounted: $TARGET_SESSION_INFO"
-            is_mounted=true
-            break
-        fi
-    done
-    
-    # If not mounted, use this device
-    if [[ "$is_mounted" == false ]]; then
-        DEVICE_PATH="$TARGET_SESSION_INFO"
-    fi
-fi
 
 if [[ -z "$DEVICE_PATH" ]]; then
     echo -e "${RED}Error: Could not detect an available iSCSI device for target $TARGET_IQN.${NC}" >&2
