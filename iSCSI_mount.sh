@@ -121,10 +121,10 @@ iscsiadm -m node --targetname="$TARGET_IQN" --portal="$PORTAL_IP" \
   --op=update --name node.session.auth.password --value="$CHAP_PASS"
 
 ## Addition of CRC32 handling for target - leaving the CRC32 selection at the target with fallback
-iscsiadm -m node --targetname="$TARGET_IQN" --portal="$PORTAL_IP" \
-  --op=update --name node.conn[0].iscsi.DataDigest --value=CRC32,None
-iscsiadm -m node --targetname="$TARGET_IQN" --portal="$PORTAL_IP" \
-  --op=update --name node.conn[0].iscsi.HeaderDigest --value=CRC32,None
+#iscsiadm -m node --targetname="$TARGET_IQN" --portal="$PORTAL_IP" \
+#  --op=update --name node.conn[0].data_digest --value=CRC32,None
+#iscsiadm -m node --targetname="$TARGET_IQN" --portal="$PORTAL_IP" \
+#  --op=update --name node.conn[0].header_digest --value=CRC32,None
 
 # Configure node for automatic startup
 echo -e "${YELLOW}Configuring node for automatic startup...${NC}"
