@@ -120,6 +120,12 @@ iscsiadm -m node --targetname="$TARGET_IQN" --portal="$PORTAL_IP" \
 iscsiadm -m node --targetname="$TARGET_IQN" --portal="$PORTAL_IP" \
   --op=update --name node.session.auth.password --value="$CHAP_PASS"
 
+## Addition of CRC32 handling for target - leaving the CRC32 selection at the target with fallback
+iscsiadm -m node --targetname="$TARGET_IQN" --portal="$PORTAL_IP" \
+  --op=update --name node.conn[0].iscsi.DataDigest --value=CRC32,None
+iscsiadm -m node --targetname="$TARGET_IQN" --portal="$PORTAL_IP" \
+  --op=update --name node.conn[0].iscsi.HeaderDigest --value=CRC32,None
+
 # Configure node for automatic startup
 echo -e "${YELLOW}Configuring node for automatic startup...${NC}"
 iscsiadm -m node --targetname="$TARGET_IQN" --portal="$PORTAL_IP" \
@@ -135,6 +141,13 @@ fi
 # Check if session already exists before attempting login
 echo -e "${YELLOW}Checking for existing iSCSI sessions...${NC}"
 EXISTING_SESSION=$(iscsiadm -m session 2>/dev/null | grep "$TARGET_IQN" || true)
+
+# Trigger a rescan if session exists first
+if [[ -n "$EXISTING_SESSION" ]]; then
+    echo -e "${YELLOW}Session already exists. Triggering a one-time rescan...${NC}"
+    iscsiadm -m session --rescan || true
+    sleep 5
+fi
 
 if [[ -n "$EXISTING_SESSION" ]]; then
     echo -e "${BLUE}ℹ Session already exists for target $TARGET_IQN${NC}"
